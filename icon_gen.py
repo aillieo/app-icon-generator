@@ -16,38 +16,38 @@ size_iOS = [57, 114]
 path_Android = ['drawable-hdpi/icon', 'drawable-mdpi/icon']
 size_Android = [72, 48]
 path_custom = ['my_icon', 'your_icon']
-size_custom = [60, 90]
-dict_iOS = zip(path_iOS, size_iOS)
-dict_Android = zip(path_Android, size_Android)
-dict_custom = zip(path_custom, size_custom)
+size_custom = [60, 100]
 
-# generate options:
-gen_for_iOS = True
-gen_for_Android = True
-param_rounded = float(90) / 512
-param_outline = (float(30) / 512, 255, 255, 255)
-need_rounded = True
-need_outline = False
+# generate options and params:
+auto_overwrite = True
+gen_for_iOS = False
+gen_for_Android = False
+need_frame = True
+frame_width_ratio = float(30) / 512
+frame_radius_ratio = float(90) / 512
+frame_color = (255, 255, 255)
+need_rounded = False
+rounded_radius_ratio = float(90) / 512
 
 
-def get_gen_options():
-    """collect gen options including icons for iOS or Android, whether rounded icon or outlined icon"""
-    pass
+def tips_for_gen_options():
+    tips = """(You can customize the generate options and parameters in the script)"""
+    print(tips)
 
 
 def get_ref_file():
     """get reference image by finding one image file in current directory or manually input"""
     file_ext = ['png', 'jpg', 'jpeg']
-    files = os.listdir()
+    files = os.listdir('.')
     ref_file = ''
     for filename in files:
         if filename.split('.')[-1].lower() in file_ext:
             ref_file = filename
             break
     if ref_file:
-        print('will use %s as reference image' % ref_file)
+        print('Will use "%s" as reference image' % ref_file)
     else:
-        print('can not find property file, now please specific one')
+        print('Can not find property file, now please specific one')
         ref_file = input('input file name:')
     if not os.path.exists(ref_file):
         raise IOError('file not found: ' + ref_file)
@@ -56,13 +56,13 @@ def get_ref_file():
 
 def gen_template_img(ref_file):
     """get template image for later resizing"""
-    ref_img = Image.open(ref_file)
-    size = min(ref_img.width, ref_img.height)
-    template_img = ref_img.resize((size, size), Image.BILINEAR)
+    template_img = Image.open(ref_file)
+    size = min(template_img.width, template_img.height)
+    template_img = template_img.resize((size, size), Image.BILINEAR)
+    if need_frame:
+        template_img = add_frame(template_img)
     if need_rounded:
-        template_img = add_rounded(template_img)
-    if need_outline:
-        template_img = add_outline(template_img)
+        template_img = round_corner(template_img)
     return template_img
 
 
@@ -75,36 +75,54 @@ def gen_icons(template_img, dict_path_size):
         if path and not os.path.exists(path):
             os.makedirs(path)
         out_img = template_img.resize((size, size), Image.BILINEAR)
-        try:
-            out_img.save(name, 'PNG')
-        except IOError:
-            print("IOError: save file failed" + name)
+        if auto_overwrite and not os.path.exists(name):
+            try:
+                out_img.save(name, 'PNG')
+            except IOError:
+                print("IOError: save file failed: " + name)
+        else:
+            print('File already exists: %s , set "auto_overwrite" True to enable overwrite' % name)
 
 
-def add_rounded(img_in):
+def round_corner(img_in):
     """rounding corner for template"""
     if img_in.mode != 'RGBA':
         img_in = img_in.convert('RGBA')
     size = img_in.size[0]
-    radius = size * param_rounded
-    if radius > 0:
+    radius = size * rounded_radius_ratio
+    if radius > 0 and rounded_radius_ratio < 0.5:
         img_in.load()
         for i in range(size):
             for j in range(size):
-                if will_cut_off(size, radius, i, j):
+                if in_corner(size, radius, i, j):
                     img_in.putpixel((i, j), (0, 0, 0, 0))
-    img_out = img_in
-    return img_out
+        print("Round corner finished!")
+    else:
+        print('Round corner failed due to invalid parameters, please check "rounded_radius_ratio"')
+    return img_in
 
 
-def add_outline(img_in):
-    """add outline for template"""
-    img_out = img_in
-    return img_out
+def add_frame(img_in):
+    """adding frame for template"""
+    size = img_in.size[0]
+    width = size * frame_width_ratio
+    radius = size * frame_radius_ratio
+    if radius > 0 and frame_radius_ratio < 0.5 and frame_width_ratio < 0.5:
+        img_in.load()
+        for i in range(size):
+            for j in range(size):
+                if in_frame(size, width, radius, i, j):
+                    img_in.putpixel((i, j), frame_color)
+        print("Add frame finished!")
+    else:
+        print('Add frame failed due to invalid parameters, please check "frame_width_ratio" and "frame_radius_ratio"')
+    return img_in
 
 
-def will_cut_off(size, radius, x, y):
-    """judge whether a point should be transparent"""
+def in_corner(size, radius, x, y, base_offset=0):
+    """judge whether a point is corner of icon"""
+    x -= base_offset
+    y -= base_offset
     center = (0, 0)
     if x < radius and y < radius:
         center = (radius, radius)
@@ -121,17 +139,30 @@ def will_cut_off(size, radius, x, y):
     return False
 
 
+def in_frame(size, width, radius, x, y):
+    """judge whether a point should be set frame color"""
+    inner_rect = width < x < size - width and width < y < size - width
+    if not inner_rect:
+        return True
+    else:
+        return in_corner(size - 2 * width, radius - width, x, y, width)
+
+
 if __name__ == '__main__':
     file = get_ref_file()
-    get_gen_options()
+    tips_for_gen_options()
     img = gen_template_img(file)
+
     if gen_for_iOS:
-        print('geneRating for iOS ...')
+        print('Generating for iOS...')
+        dict_iOS = zip(path_iOS, size_iOS)
         gen_icons(img, dict_iOS)
     if gen_for_Android:
-        print('geneRating for Android ...')
+        print('Generating for Android...')
+        dict_Android = zip(path_Android, size_Android)
         gen_icons(img, dict_Android)
     if not gen_for_iOS and not gen_for_Android:
-        print('geneRating custom icons ...')
+        print('Generating custom icons...')
+        dict_custom = zip(path_custom, size_custom)
         gen_icons(img, dict_custom)
-    print('finished icon generation!')
+    print('Finished icon generation!')
