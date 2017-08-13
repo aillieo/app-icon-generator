@@ -75,7 +75,7 @@ def gen_icons(template_img, dict_path_size):
         if path and not os.path.exists(path):
             os.makedirs(path)
         out_img = template_img.resize((size, size), Image.BILINEAR)
-        if auto_overwrite and not os.path.exists(name):
+        if auto_overwrite or not os.path.exists(name):
             try:
                 out_img.save(name, 'PNG')
             except IOError:
